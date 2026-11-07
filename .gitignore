@@ -1,0 +1,53 @@
+# Build output
+build/
+build-*/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+
+# Compiled objects and binaries (C++ / CUDA)
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.cubin
+*.fatbin
+*.ptx
+*.sass
+
+# CMake-generated files
+*.ninja
+.ninja_deps
+.ninja_log
+Makefile
+
+# Dependency and coverage output
+*.d
+*.gcda
+*.gcno
+*.gcov
+*.profraw
+*.profdata
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cache/
+compile_flags.txt
+
+# OS cruft
+.DS_Store
+Thumbs.db
