@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.30)
 project(Spire LANGUAGES CXX CUDA)
 
+find_package(CUDAToolkit REQUIRED)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
@@ -24,3 +26,8 @@ target_include_directories(spire_core PUBLIC
 
 # Link CUDA runtime library
 target_link_libraries(spire_core PRIVATE CUDA::cudart)
+
+# Define executable target
+add_executable(spire src/main.cpp)
+
+target_link_libraries(spire PRIVATE spire_core CUDA::cudart)

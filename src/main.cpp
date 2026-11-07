@@ -5,7 +5,7 @@ int main() {
     int device_count = 0;
     cudaError_t err = cudaGetDeviceCount(&device_count);
     
-    if (err != cudaSUCCESS || device_count == 0) {
+    if (err != cudaSuccess || device_count == 0) {
         std::cerr << "[-] No CUDA-capable devices detected or driver error." << std::endl;
         return 1;
     }
