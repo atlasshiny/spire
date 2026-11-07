@@ -1,0 +1,64 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 30,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "default",
+      "displayName": "Release (Blackwell sm_100 + sm_120)",
+      "description": "Ninja release build targeting B200 (sm_100) and RTX 50 series (sm_120)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CUDA_ARCHITECTURES": "100;120"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug (Blackwell sm_100 + sm_120)",
+      "description": "Ninja debug build targeting B200 (sm_100) and RTX 50 series (sm_120)",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "local",
+      "displayName": "Release (native GPU only)",
+      "description": "Fast local builds compiled only for the GPU installed in this machine",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/local",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CUDA_ARCHITECTURES": "native"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "local",
+      "configurePreset": "local"
+    }
+  ]
+}

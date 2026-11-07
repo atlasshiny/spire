@@ -8,9 +8,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# Ensure CUDA runtime is linked properly
-# Target Blackwell GPUs: 100 = B200, 120 = RTX 50 series (RTX 5060, 5090)
-set(CMAKE_CUDA_ARCHITECTURES "100;120")
+# Target Blackwell GPUs by default: 100 = B200, 120 = RTX 50 series (RTX 5060, 5090).
+# Override from the command line for faster local builds, e.g. -DCMAKE_CUDA_ARCHITECTURES=native
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES "100;120")
+endif()
 
 # Define library target
 add_library(spire_core
