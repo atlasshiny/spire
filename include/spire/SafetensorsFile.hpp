@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <spire/mapped_file.hpp>
+
 namespace spire {
 
 enum class DType { F32, F16, BF16 };
@@ -31,9 +33,10 @@ struct TensorView {
     std::size_t element_count() const;
 };
 
-// Read-only access to a .safetensors file. This layer knows nothing about CUDA:
-// it validates the file/header and exposes raw tensor views, so parsing can be
-// tested on any host.
+// Read-only access to a .safetensors file, mapped into memory rather than read
+// into a heap buffer. This layer knows nothing about CUDA: it validates the
+// file/header and exposes raw tensor views, so parsing can be tested on any
+// host.
 class SafetensorsFile {
 public:
     explicit SafetensorsFile(const std::string& path);
@@ -48,7 +51,7 @@ public:
     const TensorView& tensor(std::string_view name) const;
 
 private:
-    std::vector<std::byte> buffer_; // whole file, header included
+    MappedFile file_; // whole file, header included
     std::unordered_map<std::string, TensorView> tensors_;
 };
 

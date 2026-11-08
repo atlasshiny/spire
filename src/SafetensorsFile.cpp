@@ -3,7 +3,6 @@
 #include <nlohmann/json.hpp>
 
 #include <cstring>
-#include <fstream>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -67,32 +66,14 @@ std::size_t TensorView::element_count() const {
     return checked_element_count(shape);
 }
 
-SafetensorsFile::SafetensorsFile(const std::string& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open safetensors file: " + path);
-    }
-
-    file.seekg(0, std::ios::end);
-    const std::streamoff size_off = file.tellg();
-    if (size_off < 0) {
-        throw std::runtime_error("failed to determine size of '" + path + "'");
-    }
-    const std::uint64_t file_size = static_cast<std::uint64_t>(size_off);
+SafetensorsFile::SafetensorsFile(const std::string& path) : file_(path) {
+    const std::uint64_t file_size = static_cast<std::uint64_t>(file_.size());
     if (file_size < sizeof(std::uint64_t)) {
         throw std::runtime_error("'" + path + "' is not a valid safetensors file");
     }
 
-    file.seekg(0, std::ios::beg);
-    buffer_.resize(static_cast<std::size_t>(file_size));
-    file.read(reinterpret_cast<char*>(buffer_.data()),
-              static_cast<std::streamsize>(buffer_.size()));
-    if (!file) {
-        throw std::runtime_error("failed to read '" + path + "'");
-    }
-
     std::uint64_t header_len = 0;
-    std::memcpy(&header_len, buffer_.data(), sizeof(header_len));
+    std::memcpy(&header_len, file_.data(), sizeof(header_len));
     if (header_len > kMaxHeaderBytes) {
         throw std::runtime_error("safetensors header is unreasonably large");
     }
@@ -101,7 +82,7 @@ SafetensorsFile::SafetensorsFile(const std::string& path) {
     }
 
     const auto* header_begin =
-        reinterpret_cast<const char*>(buffer_.data() + sizeof(header_len));
+        reinterpret_cast<const char*>(file_.data() + sizeof(header_len));
     json header;
     try {
         header = json::parse(header_begin, header_begin + header_len);
@@ -137,7 +118,7 @@ SafetensorsFile::SafetensorsFile(const std::string& path) {
 
         TensorView view;
         view.data = std::span<const std::byte>(
-            buffer_.data() + data_start + offsets[0], offsets[1] - offsets[0]);
+            file_.data() + data_start + offsets[0], offsets[1] - offsets[0]);
         view.dtype = parse_dtype(tensor.at("dtype").get<std::string>());
         view.shape = tensor.at("shape").get<std::vector<std::size_t>>();
 

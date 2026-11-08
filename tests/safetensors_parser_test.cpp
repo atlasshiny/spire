@@ -69,6 +69,16 @@ int main() {
     }
     expect(truncated_threw, "truncated file should throw");
 
+    bool missing_file_threw = false;
+    try {
+        const spire::SafetensorsFile missing_file(
+            (fs::temp_directory_path() / "spire_parser_does_not_exist.safetensors").string());
+        (void)missing_file;
+    } catch (const std::exception&) {
+        missing_file_threw = true;
+    }
+    expect(missing_file_threw, "nonexistent file should throw");
+
     fs::remove(fixture_path);
     fs::remove(truncated_path);
 
