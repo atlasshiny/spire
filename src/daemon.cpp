@@ -1,9 +1,6 @@
 #include <spire/daemon.hpp>
-#include <iostream>
+#include <spire/kernels.cuh>
 #include <chrono>
-
-// Forward declaration of our CUDA kernel host launcher
-extern "C" void launch_sae_kernel(const spire::ActivationPayload& payload);
 
 namespace spire {
 
