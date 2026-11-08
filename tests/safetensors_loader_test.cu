@@ -78,12 +78,15 @@ int main() {
     const Fixture fixture = make_fixture();
 
     const fs::path f32_path = fs::temp_directory_path() / "spire_loader_f32.safetensors";
+    const fs::path f16_path = fs::temp_directory_path() / "spire_loader_f16.safetensors";
     const fs::path bf16_path = fs::temp_directory_path() / "spire_loader_bf16.safetensors";
 
-    write_safetensors(f32_path.string(), fixture, /*bf16=*/false);
-    write_safetensors(bf16_path.string(), fixture, /*bf16=*/true);
+    write_safetensors(f32_path.string(), fixture, FixtureDType::F32);
+    write_safetensors(f16_path.string(), fixture, FixtureDType::F16);
+    write_safetensors(bf16_path.string(), fixture, FixtureDType::BF16);
 
     check_loaded(f32_path.string(), fixture, "F32");
+    check_loaded(f16_path.string(), fixture, "F16");
     check_loaded(bf16_path.string(), fixture, "BF16");
 
     bool missing_threw = false;
@@ -95,6 +98,7 @@ int main() {
     expect(missing_threw, "loading a missing tensor should throw");
 
     fs::remove(f32_path);
+    fs::remove(f16_path);
     fs::remove(bf16_path);
 
     if (failures == 0) {

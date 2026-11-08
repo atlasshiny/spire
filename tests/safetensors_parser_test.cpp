@@ -28,7 +28,7 @@ int main() {
     const fs::path truncated_path = fs::temp_directory_path() / "spire_parser_truncated.safetensors";
 
     const Fixture fixture = make_fixture();
-    write_safetensors(fixture_path.string(), fixture, /*bf16=*/false);
+    write_safetensors(fixture_path.string(), fixture, FixtureDType::F32);
 
     const spire::SafetensorsFile file(fixture_path.string());
 
