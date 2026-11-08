@@ -38,13 +38,25 @@ struct SaeWeights {
     }
 };
 
-// Loads encoder.weight / encoder.bias from a .safetensors file.
-// Supported tensor dtypes: BF16, F16, F32 (weights are converted to bf16,
-// bias to fp32). The upload is ordered on `stream` and synchronized before
-// returning, so the tensors are ready for immediate use.
+// Describes how an SAE checkpoint names and lays out its tensors. Keeping this
+// in one object lets checkpoints that differ from the default convention load
+// without hardcoding names at every call site. An expected dimension of zero
+// means "accept whatever the file contains".
+struct SaeConfig {
+    std::string weight_name = "encoder.weight";
+    std::string bias_name = "encoder.bias";
+    std::size_t expected_sae_dim = 0;    // [sae_dim] rows of the weight matrix
+    std::size_t expected_hidden_dim = 0; // columns of the weight matrix
+};
+
+// Loads `config.weight_name` / `config.bias_name` from a .safetensors file.
+// Weights must be [sae_dim, hidden_dim] and bias [sae_dim]; both are checked
+// against the config when expected dimensions are set. Supported source dtypes:
+// BF16, F16, F32 (weights are converted to bf16, bias to fp32). Uploads are
+// queued on `stream` and synchronized before returning, so the result is ready
+// for immediate use.
 SaeWeights load_safetensors(const std::string& filepath,
-                            cudaStream_t stream = nullptr,
-                            const std::string& weight_name = "encoder.weight",
-                            const std::string& bias_name = "encoder.bias");
+                            const SaeConfig& config = {},
+                            cudaStream_t stream = nullptr);
 
 } // namespace spire

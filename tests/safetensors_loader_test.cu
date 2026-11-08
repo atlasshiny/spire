@@ -23,8 +23,8 @@ void expect(bool condition, const char* message) {
 }
 
 void check_loaded(const std::string& path, const spire::test::Fixture& fixture,
-                  const char* label) {
-    const spire::SaeWeights model = spire::load_safetensors(path);
+                  const char* label, const spire::SaeConfig& config = {}) {
+    const spire::SaeWeights model = spire::load_safetensors(path, config);
 
     expect(model.sae_dim == fixture.sae_dim, "loaded sae_dim");
     expect(model.hidden_dim == fixture.hidden_dim, "loaded hidden_dim");
@@ -80,26 +80,54 @@ int main() {
     const fs::path f32_path = fs::temp_directory_path() / "spire_loader_f32.safetensors";
     const fs::path f16_path = fs::temp_directory_path() / "spire_loader_f16.safetensors";
     const fs::path bf16_path = fs::temp_directory_path() / "spire_loader_bf16.safetensors";
+    const fs::path custom_path = fs::temp_directory_path() / "spire_loader_custom.safetensors";
 
     write_safetensors(f32_path.string(), fixture, FixtureDType::F32);
     write_safetensors(f16_path.string(), fixture, FixtureDType::F16);
     write_safetensors(bf16_path.string(), fixture, FixtureDType::BF16);
+    write_safetensors(custom_path.string(), fixture, FixtureDType::BF16, "W_enc", "b_enc");
 
-    check_loaded(f32_path.string(), fixture, "F32");
-    check_loaded(f16_path.string(), fixture, "F16");
-    check_loaded(bf16_path.string(), fixture, "BF16");
+    spire::SaeConfig config;
+    config.expected_sae_dim = fixture.sae_dim;
+    config.expected_hidden_dim = fixture.hidden_dim;
+
+    check_loaded(f32_path.string(), fixture, "F32", config);
+    check_loaded(f16_path.string(), fixture, "F16", config);
+    check_loaded(bf16_path.string(), fixture, "BF16", config);
+
+    // Custom tensor names are addressed through the config.
+    spire::SaeConfig custom_config;
+    custom_config.weight_name = "W_enc";
+    custom_config.bias_name = "b_enc";
+    custom_config.expected_sae_dim = fixture.sae_dim;
+    custom_config.expected_hidden_dim = fixture.hidden_dim;
+    check_loaded(custom_path.string(), fixture, "custom names", custom_config);
 
     bool missing_threw = false;
     try {
-        (void)spire::load_safetensors(f32_path.string(), nullptr, "missing.weight");
+        spire::SaeConfig missing_config;
+        missing_config.weight_name = "missing.weight";
+        (void)spire::load_safetensors(f32_path.string(), missing_config);
     } catch (const std::exception&) {
         missing_threw = true;
     }
     expect(missing_threw, "loading a missing tensor should throw");
 
+    // A config whose expected dimensions do not match the file must be rejected.
+    spire::SaeConfig wrong_dimensions;
+    wrong_dimensions.expected_hidden_dim = fixture.hidden_dim + 1;
+    bool wrong_dims_threw = false;
+    try {
+        (void)spire::load_safetensors(f32_path.string(), wrong_dimensions);
+    } catch (const std::exception&) {
+        wrong_dims_threw = true;
+    }
+    expect(wrong_dims_threw, "mismatched expected dimensions should throw");
+
     fs::remove(f32_path);
     fs::remove(f16_path);
     fs::remove(bf16_path);
+    fs::remove(custom_path);
 
     if (failures == 0) {
         std::printf("safetensors loader tests passed\n");

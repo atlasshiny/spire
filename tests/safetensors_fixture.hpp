@@ -92,17 +92,19 @@ inline std::vector<std::byte> encode_values(const std::vector<float>& values,
 }
 
 inline void write_safetensors(const std::string& path, const Fixture& f,
-                              FixtureDType dtype) {
+                              FixtureDType dtype,
+                              const std::string& weight_name = "encoder.weight",
+                              const std::string& bias_name = "encoder.bias") {
     const std::vector<std::byte> weight_bytes = encode_values(f.weights, dtype);
     const std::vector<std::byte> bias_bytes = encode_values(f.bias, dtype);
 
     nlohmann::json header;
-    header["encoder.weight"] = {
+    header[weight_name] = {
         {"dtype", dtype_name(dtype)},
         {"shape", {f.sae_dim, f.hidden_dim}},
         {"data_offsets", {0, weight_bytes.size()}},
     };
-    header["encoder.bias"] = {
+    header[bias_name] = {
         {"dtype", dtype_name(dtype)},
         {"shape", {f.sae_dim}},
         {"data_offsets", {weight_bytes.size(), weight_bytes.size() + bias_bytes.size()}},
