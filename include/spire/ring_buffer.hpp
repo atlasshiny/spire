@@ -10,8 +10,8 @@
 namespace spire {
 
 struct ActivationPayload {
-    const __nv_bfloat16* d_input; // [batch_size, hidden_dim]
-    const float* d_weights; // [sae_dim, hidden_dim], row-major
+    const __nv_bfloat16* d_input;   // [batch_size, hidden_dim]
+    const __nv_bfloat16* d_weights; // [sae_dim, hidden_dim], row-major, bf16
     const float* d_bias; // [sae_dim]
     float* d_latents; // [batch_size, sae_dim]
     size_t batch_size;

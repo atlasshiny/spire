@@ -42,9 +42,9 @@ int main() {
         value = __float2bfloat16(input_dist(rng));
     }
 
-    std::vector<float> h_weights(sae_dim * hidden_dim);
+    std::vector<__nv_bfloat16> h_weights(sae_dim * hidden_dim);
     for (auto& weight : h_weights) {
-        weight = weight_dist(rng);
+        weight = __float2bfloat16(weight_dist(rng));
     }
 
     std::vector<float> h_bias(sae_dim);
@@ -53,12 +53,12 @@ int main() {
     }
 
     const std::size_t input_bytes = h_input.size() * sizeof(__nv_bfloat16);
-    const std::size_t weights_bytes = h_weights.size() * sizeof(float);
+    const std::size_t weights_bytes = h_weights.size() * sizeof(__nv_bfloat16);
     const std::size_t bias_bytes = h_bias.size() * sizeof(float);
     const std::size_t latents_bytes = batch_size * sae_dim * sizeof(float);
 
     __nv_bfloat16* d_input = nullptr;
-    float* d_weights = nullptr;
+    __nv_bfloat16* d_weights = nullptr;
     float* d_bias = nullptr;
     float* d_latents = nullptr;
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_input), input_bytes));
@@ -117,11 +117,11 @@ int main() {
     for (std::size_t b = 0; b < batch_size; ++b) {
         const float* x = h_input_float.data() + b * hidden_dim;
         for (std::size_t j = 0; j < sae_dim; ++j) {
-            const float* w_row = h_weights.data() + j * hidden_dim;
+            const __nv_bfloat16* w_row = h_weights.data() + j * hidden_dim;
 
             float sum = h_bias[j];
             for (std::size_t i = 0; i < hidden_dim; ++i) {
-                sum += w_row[i] * x[i];
+                sum += __bfloat162float(w_row[i]) * x[i];
             }
 
             const float expected = std::max(0.0f, sum);

@@ -12,10 +12,10 @@ constexpr unsigned int kMaxBlocks = 65535;
 
 // Warp-per-output SAE encode: z = ReLU(W_enc * x + b_enc).
 // One warp computes one (batch, latent) dot product. Lanes stride along the
-// row so consecutive lanes read consecutive floats (coalesced 128B loads).
+// row so consecutive lanes read consecutive elements (coalesced loads).
 __global__ void sae_encode_kernel(
     const __nv_bfloat16* __restrict__ input, // [batch_size, hidden_dim]
-    const float* __restrict__ weights,       // [sae_dim, hidden_dim], row-major
+    const __nv_bfloat16* __restrict__ weights, // [sae_dim, hidden_dim], row-major
     const float* __restrict__ bias,          // [sae_dim]
     float* __restrict__ output,              // [batch_size, sae_dim]
     size_t hidden_dim,
@@ -32,11 +32,11 @@ __global__ void sae_encode_kernel(
         const size_t latent_idx = out_idx % sae_dim;
 
         const __nv_bfloat16* x = input + batch_idx * hidden_dim;
-        const float* w_row = weights + latent_idx * hidden_dim;
+        const __nv_bfloat16* w_row = weights + latent_idx * hidden_dim;
 
         float sum = 0.0f;
         for (size_t i = lane; i < hidden_dim; i += 32) {
-            sum += w_row[i] * __bfloat162float(x[i]);
+            sum += __bfloat162float(w_row[i]) * __bfloat162float(x[i]);
         }
 
         // Reduce the 32 partial sums; all lanes are active here.
