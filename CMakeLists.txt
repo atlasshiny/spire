@@ -33,6 +33,7 @@ add_library(spire_core
     src/daemon.cpp
     src/kernels/sae_encoder.cu
     src/SafetensorsFile.cpp
+    src/load_safetensors.cpp
 )
 
 # Set public include paths
