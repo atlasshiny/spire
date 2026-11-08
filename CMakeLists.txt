@@ -49,3 +49,6 @@ target_link_libraries(spire_core PRIVATE CUDA::cudart nlohmann_json::nlohmann_js
 add_executable(spire src/main.cpp)
 
 target_link_libraries(spire PRIVATE spire_core CUDA::cudart)
+
+enable_testing()
+add_subdirectory(tests)
