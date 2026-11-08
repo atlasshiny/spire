@@ -55,6 +55,18 @@ void check_loaded(const std::string& path, const spire::test::Fixture& fixture,
     }
     expect(weights_match, "weights match bf16 reference");
     expect(host_bias == fixture.bias, "bias matches fp32 reference");
+
+    // make_payload must share the weight/bias handles (refcount bump, no copy)
+    // and fill the dimensions from the model.
+    const spire::ActivationPayload payload =
+        model.make_payload(spire::DeviceBuffer<__nv_bfloat16>{},
+                           spire::DeviceBuffer<float>{}, 2, nullptr);
+    expect(payload.d_weights == model.d_weights, "payload should share weights");
+    expect(payload.d_bias == model.d_bias, "payload should share bias");
+    expect(payload.sae_dim == model.sae_dim, "payload sae_dim should match model");
+    expect(payload.hidden_dim == model.hidden_dim, "payload hidden_dim should match model");
+    expect(payload.batch_size == 2, "payload batch_size should be forwarded");
+    expect(payload.stream == nullptr, "payload stream should be forwarded");
 }
 
 } // namespace

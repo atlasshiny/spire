@@ -1,3 +1,4 @@
+#include <spire/SaeWeights.hpp>
 #include <spire/cuda_macros.hpp>
 #include <spire/daemon.hpp>
 #include <spire/ring_buffer.hpp>
@@ -80,22 +81,19 @@ int main() {
     CUDA_CHECK(cudaMemcpyAsync(d_bias.get(), h_bias.data(), bias_bytes,
                                cudaMemcpyHostToDevice, stream));
 
+    spire::SaeWeights model;
+    model.d_weights = d_weights;
+    model.d_bias = d_bias;
+    model.sae_dim = sae_dim;
+    model.hidden_dim = hidden_dim;
+
     spire::ActivationQueue queue;
     {
         spire::Daemon daemon(queue);
         daemon.start();
 
         std::cout << "[*] Pushing activation payload into queue...\n";
-        queue.push(spire::ActivationPayload{
-            .d_input = d_input,
-            .d_weights = d_weights,
-            .d_bias = d_bias,
-            .d_latents = d_latents,
-            .batch_size = batch_size,
-            .hidden_dim = hidden_dim,
-            .sae_dim = sae_dim,
-            .stream = stream,
-        });
+        queue.push(model.make_payload(d_input, d_latents, batch_size, stream));
 
         // Give the worker time to pop the payload and enqueue the kernel.
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
