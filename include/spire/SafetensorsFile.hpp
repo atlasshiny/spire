@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -11,6 +12,13 @@
 #include <spire/mapped_file.hpp>
 
 namespace spire {
+
+// safetensors is little-endian by definition. The header length is decoded
+// explicitly from bytes, but tensor payloads are exposed as raw bytes and later
+// reinterpreted as F16/F32 (or uploaded verbatim as BF16), so the host has to
+// match the file's byte order.
+static_assert(std::endian::native == std::endian::little,
+              "spire assumes a little-endian host: safetensors payloads are little-endian");
 
 enum class DType { F32, F16, BF16 };
 

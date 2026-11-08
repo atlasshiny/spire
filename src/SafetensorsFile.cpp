@@ -2,7 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include <cstring>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -14,6 +14,17 @@ namespace {
 using json = nlohmann::json;
 
 constexpr std::uint64_t kMaxHeaderBytes = 100ull * 1024ull * 1024ull;
+
+// Decodes the 8-byte header length without assuming host byte order, so the
+// parser works even if this code is ever built for a big-endian host.
+std::uint64_t load_le_u64(const std::byte* data) {
+    std::uint64_t value = 0;
+    for (std::size_t i = 0; i < sizeof(value); ++i) {
+        value |= static_cast<std::uint64_t>(std::to_integer<std::uint8_t>(data[i]))
+                 << (8 * i);
+    }
+    return value;
+}
 
 DType parse_dtype(const std::string& dtype) {
     if (dtype == "F32") {
@@ -72,8 +83,7 @@ SafetensorsFile::SafetensorsFile(const std::string& path) : file_(path) {
         throw std::runtime_error("'" + path + "' is not a valid safetensors file");
     }
 
-    std::uint64_t header_len = 0;
-    std::memcpy(&header_len, file_.data(), sizeof(header_len));
+    const std::uint64_t header_len = load_le_u64(file_.data());
     if (header_len > kMaxHeaderBytes) {
         throw std::runtime_error("safetensors header is unreasonably large");
     }
