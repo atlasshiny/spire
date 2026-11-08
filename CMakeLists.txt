@@ -3,6 +3,20 @@ project(Spire LANGUAGES CXX CUDA)
 
 find_package(CUDAToolkit REQUIRED)
 
+# JSON parsing for .safetensors headers. Prefer a system package; fall back to
+# a pinned FetchContent download.
+find_package(nlohmann_json 3.11.3 QUIET)
+if(NOT nlohmann_json_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.12.0
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
@@ -18,6 +32,7 @@ endif()
 add_library(spire_core
     src/daemon.cpp
     src/kernels/sae_encoder.cu
+    src/SafetensorsFile.cpp
 )
 
 # Set public include paths
@@ -26,8 +41,8 @@ target_include_directories(spire_core PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-# Link CUDA runtime library
-target_link_libraries(spire_core PRIVATE CUDA::cudart)
+# Link CUDA runtime library and JSON parser
+target_link_libraries(spire_core PRIVATE CUDA::cudart nlohmann_json::nlohmann_json)
 
 # Define executable target
 add_executable(spire src/main.cpp)
