@@ -57,22 +57,27 @@ int main() {
     const std::size_t bias_bytes = h_bias.size() * sizeof(float);
     const std::size_t latents_bytes = batch_size * sae_dim * sizeof(float);
 
-    __nv_bfloat16* d_input = nullptr;
-    __nv_bfloat16* d_weights = nullptr;
-    float* d_bias = nullptr;
-    float* d_latents = nullptr;
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_input), input_bytes));
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_weights), weights_bytes));
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_bias), bias_bytes));
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_latents), latents_bytes));
+    spire::DeviceBuffer<__nv_bfloat16> d_input;
+    spire::DeviceBuffer<__nv_bfloat16> d_weights;
+    spire::DeviceBuffer<float> d_bias;
+    spire::DeviceBuffer<float> d_latents;
+    try {
+        d_input = spire::make_device_buffer<__nv_bfloat16>(h_input.size());
+        d_weights = spire::make_device_buffer<__nv_bfloat16>(h_weights.size());
+        d_bias = spire::make_device_buffer<float>(h_bias.size());
+        d_latents = spire::make_device_buffer<float>(batch_size * sae_dim);
+    } catch (const std::exception& e) {
+        std::cerr << "[-] " << e.what() << "\n";
+        return 1;
+    }
 
     cudaStream_t stream = nullptr;
     CUDA_CHECK(cudaStreamCreate(&stream));
-    CUDA_CHECK(cudaMemcpyAsync(d_input, h_input.data(), input_bytes,
+    CUDA_CHECK(cudaMemcpyAsync(d_input.get(), h_input.data(), input_bytes,
                                cudaMemcpyHostToDevice, stream));
-    CUDA_CHECK(cudaMemcpyAsync(d_weights, h_weights.data(), weights_bytes,
+    CUDA_CHECK(cudaMemcpyAsync(d_weights.get(), h_weights.data(), weights_bytes,
                                cudaMemcpyHostToDevice, stream));
-    CUDA_CHECK(cudaMemcpyAsync(d_bias, h_bias.data(), bias_bytes,
+    CUDA_CHECK(cudaMemcpyAsync(d_bias.get(), h_bias.data(), bias_bytes,
                                cudaMemcpyHostToDevice, stream));
 
     spire::ActivationQueue queue;
@@ -100,7 +105,7 @@ int main() {
     CUDA_CHECK(cudaStreamSynchronize(stream));
 
     std::vector<float> h_latents(batch_size * sae_dim);
-    CUDA_CHECK(cudaMemcpyAsync(h_latents.data(), d_latents, latents_bytes,
+    CUDA_CHECK(cudaMemcpyAsync(h_latents.data(), d_latents.get(), latents_bytes,
                                 cudaMemcpyDeviceToHost, stream));
     CUDA_CHECK(cudaStreamSynchronize(stream));
 
@@ -138,10 +143,7 @@ int main() {
     }
 
     CUDA_CHECK(cudaStreamDestroy(stream));
-    CUDA_CHECK(cudaFree(d_input));
-    CUDA_CHECK(cudaFree(d_weights));
-    CUDA_CHECK(cudaFree(d_bias));
-    CUDA_CHECK(cudaFree(d_latents));
+    // The DeviceBuffer handles release the device allocations on scope exit.
 
     const std::size_t total_latents = batch_size * sae_dim;
     std::cout << "[*] Latents: " << total_latents

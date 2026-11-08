@@ -87,8 +87,7 @@ __global__ __launch_bounds__(kThreadsPerBlock) void sae_encode_kernel(
 namespace spire {
 
 void launch_sae_kernel(const ActivationPayload& payload) {
-    if (payload.d_input == nullptr || payload.d_weights == nullptr ||
-        payload.d_bias == nullptr || payload.d_latents == nullptr ||
+    if (!payload.d_input || !payload.d_weights || !payload.d_bias || !payload.d_latents ||
         payload.batch_size == 0 || payload.hidden_dim == 0 || payload.sae_dim == 0) {
         return;
     }
@@ -100,10 +99,10 @@ void launch_sae_kernel(const ActivationPayload& payload) {
 
     // Launch asynchronously on the model's CUDA stream.
     sae_encode_kernel<<<blocks, kThreadsPerBlock, 0, payload.stream>>>(
-        payload.d_input,
-        payload.d_weights,
-        payload.d_bias,
-        payload.d_latents,
+        payload.d_input.get(),
+        payload.d_weights.get(),
+        payload.d_bias.get(),
+        payload.d_latents.get(),
         payload.hidden_dim,
         payload.sae_dim,
         total_outputs
