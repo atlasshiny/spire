@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <memory>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <cuda_runtime.h>
@@ -40,26 +39,6 @@ DeviceBuffer<T> make_device_buffer(std::size_t count) {
     }
 
     return DeviceBuffer<T>(static_cast<T*>(raw), CudaDeleter<T>{});
-}
-
-// Copies host data to fresh device memory. The transfer is ordered on `stream`;
-// the caller is responsible for synchronizing before reading the result (or may
-// rely on stream ordering for subsequent kernels).
-template <typename T>
-DeviceBuffer<T> to_device(std::span<const T> host, cudaStream_t stream) {
-    if (host.empty()) {
-        return DeviceBuffer<T>{};
-    }
-
-    DeviceBuffer<T> buffer = make_device_buffer<T>(host.size());
-    const cudaError_t err = cudaMemcpyAsync(buffer.get(), host.data(),
-                                            host.size() * sizeof(T),
-                                            cudaMemcpyHostToDevice, stream);
-    if (err != cudaSuccess) {
-        throw std::runtime_error(std::string("cudaMemcpyAsync failed: ") +
-                                 cudaGetErrorString(err));
-    }
-    return buffer;
 }
 
 } // namespace spire
