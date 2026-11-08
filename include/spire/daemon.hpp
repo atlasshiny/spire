@@ -15,8 +15,11 @@ private:
     void worker_loop(std::stop_token stoken);
 
 public:
-    explicit Daemon(ActivationQueue& queue);
-    ~Daemon();
+    explicit Daemon(ActivationQueue& queue) : queue_(queue) {}
+
+    ~Daemon() {
+        stop();
+    }
 
     // Delete copy/move
     Daemon(const Daemon&) = delete;
