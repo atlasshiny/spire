@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <queue>
 #include <mutex>
 #include <optional>
@@ -9,9 +10,13 @@
 namespace spire {
 
 struct ActivationPayload {
-    __nv_bfloat16* d_tensor;
+    const __nv_bfloat16* d_input; // [batch_size, hidden_dim]
+    const float* d_weights; // [sae_dim, hidden_dim], row-major
+    const float* d_bias; // [sae_dim]
+    float* d_latents; // [batch_size, sae_dim]
     size_t batch_size;
     size_t hidden_dim;
+    size_t sae_dim;
     cudaStream_t stream;
 };
 
