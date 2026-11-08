@@ -32,6 +32,7 @@ endif()
 add_library(spire_core
     src/daemon.cpp
     src/kernels/sae_encoder.cu
+    src/kernels/dtype_convert.cu
     src/SafetensorsFile.cpp
     src/mapped_file.cpp
     src/load_safetensors.cpp
