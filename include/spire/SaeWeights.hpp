@@ -6,7 +6,7 @@
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
 #include <spire/device_buffer.hpp>
-#include <spire/ring_buffer.hpp>
+#include <spire/activation_payload.hpp>
 
 namespace spire {
 

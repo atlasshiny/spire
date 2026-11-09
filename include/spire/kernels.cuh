@@ -1,6 +1,7 @@
 #pragma once
 
-#include <spire/ring_buffer.hpp>
+#include <spire/activation_payload.hpp>
+#include <spire/activation_payload.hpp>
 
 namespace spire {
 

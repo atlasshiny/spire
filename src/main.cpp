@@ -1,7 +1,7 @@
 #include <spire/SaeWeights.hpp>
 #include <spire/cuda_macros.hpp>
 #include <spire/daemon.hpp>
-#include <spire/ring_buffer.hpp>
+#include <spire/activation_queue.hpp>
 
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>

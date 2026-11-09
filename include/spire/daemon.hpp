@@ -1,6 +1,6 @@
 #pragma once
 
-#include <spire/ring_buffer.hpp>
+#include <spire/activation_queue.hpp>
 #include <thread>
 #include <atomic>
 

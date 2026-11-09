@@ -3,26 +3,11 @@
 #include <cstddef>
 #include <queue>
 #include <mutex>
-#include <cuda_runtime.h>
-#include <cuda_bf16.h>
-#include <spire/device_buffer.hpp>
+#include <spire/activation_payload.hpp>
 
 namespace spire {
 
-// One unit of work for the GPU pipeline: an input activation block plus the
-// SAE parameters and the destination buffer for the resulting latents.
-// The buffers are reference-counted, so a payload can be copied into the queue
-// while the producer keeps reading its own handle (e.g. the latents).
-struct ActivationPayload {
-    DeviceBuffer<__nv_bfloat16> d_input;   // [batch_size, hidden_dim]
-    DeviceBuffer<__nv_bfloat16> d_weights; // [sae_dim, hidden_dim], row-major, bf16
-    DeviceBuffer<float> d_bias;            // [sae_dim]
-    DeviceBuffer<float> d_latents;         // [batch_size, sae_dim]
-    size_t batch_size;
-    size_t hidden_dim;
-    size_t sae_dim;
-    cudaStream_t stream;
-};
+namespace legacy {
 
 class ActivationQueue {
 private:
@@ -52,5 +37,7 @@ public:
         return true;
     }
 };
+
+} // namespace legacy
 
 } // namespace spire
