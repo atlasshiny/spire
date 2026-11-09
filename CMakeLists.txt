@@ -18,6 +18,7 @@ if(NOT nlohmann_json_FOUND)
 endif()
 
 # Google Benchmark for performance measurements.
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 find_package(benchmark QUIET)
 if(NOT benchmark_FOUND)
     include(FetchContent)
@@ -42,7 +43,6 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
     set(CMAKE_CUDA_ARCHITECTURES "100;120")
 endif()
 
-# Define library target
 add_library(spire_core
     src/daemon.cpp
     src/kernels/sae_encoder.cu
@@ -51,20 +51,92 @@ add_library(spire_core
     src/mapped_file.cpp
     src/load_safetensors.cpp
 )
+set_target_properties(spire_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# Set public include paths
 target_include_directories(spire_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-# Link CUDA runtime library and JSON parser
 target_link_libraries(spire_core PRIVATE CUDA::cudart nlohmann_json::nlohmann_json)
 
-# Define executable target
 add_executable(spire src/main.cpp)
-
 target_link_libraries(spire PRIVATE spire_core CUDA::cudart)
+
+option(BUILD_PYTHON_BINDINGS "Build the Python bindings module" OFF)
+
+if(BUILD_PYTHON_BINDINGS)
+    # Determine which Python interpreter to use for building bindings.
+    # Priority: 1. User-provided SPIRE_PYTHON_EXECUTABLE, 2. Current active python3, 3. Fallback search.
+    if(NOT SPIRE_PYTHON_EXECUTABLE)
+        find_program(SPIRE_PYTHON_EXECUTABLE 
+                     NAMES python3 python 
+                     ENV PYTHON_EXECUTABLE)
+    endif()
+
+    if(NOT SPIRE_PYTHON_EXECUTABLE)
+        message(FATAL_ERROR "BUILD_PYTHON_BINDINGS=ON but no Python interpreter was found.")
+    endif()
+    
+    message(STATUS "Using Python interpreter: ${SPIRE_PYTHON_EXECUTABLE}")
+
+    # Pybind11 for Python bindings.
+    find_package(pybind11 QUIET)
+    if(NOT pybind11_FOUND)
+        include(FetchContent)
+        FetchContent_Declare(
+            pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11.git
+            GIT_TAG v2.13.1
+        )
+        FetchContent_MakeAvailable(pybind11)
+    endif()
+
+    # Resolve Torch paths from the selected Python environment.
+    execute_process(
+        COMMAND "${SPIRE_PYTHON_EXECUTABLE}" -c "import torch; print(torch.utils.cmake_prefix_path)"
+        RESULT_VARIABLE torch_res
+        OUTPUT_VARIABLE TORCH_CMAKE_PREFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(torch_res EQUAL 0)
+        execute_process(
+            COMMAND "${SPIRE_PYTHON_EXECUTABLE}" -c "import torch; print(torch.__path__[0])"
+            OUTPUT_VARIABLE TORCH_PYTHON_ROOT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        execute_process(
+            COMMAND "${SPIRE_PYTHON_EXECUTABLE}" -c "import sysconfig; print(sysconfig.get_path('include'))"
+            OUTPUT_VARIABLE PYTHON_INCLUDE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        set(TORCH_INCLUDE_DIR
+            "${TORCH_PYTHON_ROOT}/include"
+            "${TORCH_PYTHON_ROOT}/include/torch/csrc/api/include")
+        set(TORCH_PYTHON_LIBRARY "${TORCH_PYTHON_ROOT}/lib/libtorch_python.so")
+        list(APPEND CMAKE_PREFIX_PATH "${TORCH_CMAKE_PREFIX}")
+        find_package(Torch CONFIG REQUIRED)
+    else()
+        message(FATAL_ERROR
+            "BUILD_PYTHON_BINDINGS=ON but PyTorch was not found using "
+            "${SPIRE_PYTHON_EXECUTABLE}.")
+    endif()
+
+    # Python bindings module
+    add_library(spire_cpp MODULE src/bindings.cpp)
+    target_link_libraries(spire_cpp PRIVATE
+        spire_core CUDA::cudart pybind11::pybind11 "${TORCH_LIBRARIES}"
+        "${TORCH_PYTHON_LIBRARY}")
+    target_include_directories(spire_cpp PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${TORCH_INCLUDE_DIR}
+        ${TORCH_INCLUDE_DIRS}
+        ${PYTHON_INCLUDE_DIR})
+    set_target_properties(spire_cpp PROPERTIES
+        PREFIX ""
+        SUFFIX ".so"
+        BUILD_RPATH "${TORCH_PYTHON_ROOT}/lib")
+endif()
 
 enable_testing()
 add_subdirectory(tests)
