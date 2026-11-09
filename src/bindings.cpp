@@ -4,6 +4,8 @@
 #include <spire/SaeWeights.hpp>
 #include <spire/activation_queue.hpp>
 #include <spire/activation_payload.hpp>
+#include <spire/cuda_macros.hpp>
+#include <spire/kernels.cuh>
 #include <thread>
 #include <atomic>
 
@@ -80,6 +82,58 @@ public:
             throw std::runtime_error("Activation queue is full");
         }
     }
+
+    // =====================================================================
+    // TESTING ONLY.
+    //
+    // Runs the SAE encoder synchronously on the current stream and returns
+    // the latents so tests can compare against a host/PyTorch reference.
+    // This blocks the calling thread and bypasses the asynchronous queue,
+    // so it must never be used on a production path. Use push_activation
+    // for normal operation.
+    // =====================================================================
+    torch::Tensor process_sync(torch::Tensor hidden_states) {
+        TORCH_CHECK(hidden_states.is_cuda(),
+                    "Activation tensor must be on CUDA VRAM.");
+        TORCH_CHECK(hidden_states.dim() == 2,
+                    "Activation tensor must be [batch_size, hidden_dim].");
+        TORCH_CHECK(hidden_states.scalar_type() == torch::kBFloat16,
+                    "Activation tensor must be bfloat16.");
+        TORCH_CHECK(hidden_states.is_contiguous(),
+                    "Activation tensor must be contiguous.");
+
+        const auto batch_size = static_cast<std::size_t>(hidden_states.size(0));
+        const auto hidden_dim = static_cast<std::size_t>(hidden_states.size(1));
+        TORCH_CHECK(hidden_dim == weights_.hidden_dim,
+                    "Activation hidden_dim (", hidden_dim,
+                    ") does not match the loaded weights (", weights_.hidden_dim,
+                    ").");
+
+        // Non-owning view of the caller's tensor; torch keeps it alive for the
+        // duration of this synchronous call.
+        spire::DeviceBuffer<__nv_bfloat16> input_buf(
+            reinterpret_cast<__nv_bfloat16*>(hidden_states.data_ptr()),
+            [](__nv_bfloat16*) { /* owned by torch */ });
+
+        spire::DeviceBuffer<float> latents =
+            spire::make_device_buffer<float>(batch_size * weights_.sae_dim);
+
+        const cudaStream_t stream = c10::cuda::getCurrentCUDAStream().stream();
+
+        spire::ActivationPayload payload = weights_.make_payload(
+            std::move(input_buf), latents, batch_size, stream);
+
+        spire::launch_sae_kernel(payload);
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+
+        // Return a tensor that shares the latents allocation; the deleter keeps
+        // the DeviceBuffer alive until the tensor is destroyed.
+        return torch::from_blob(
+            latents.get(),
+            {static_cast<long>(batch_size), static_cast<long>(weights_.sae_dim)},
+            [latents](void*) { /* shared_ptr releases the CUDA allocation */ },
+            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+    }
 };
 
 PYBIND11_MODULE(spire_cpp, m) {
@@ -89,5 +143,10 @@ PYBIND11_MODULE(spire_cpp, m) {
         .def(py::init<const std::string&>())
         .def("push_activation", &PySpireDaemon::push_activation, 
              py::call_guard<py::gil_scoped_release>(),
-             "Push a PyTorch hidden state tensor into the SPSC ring buffer.");
+             "Push a PyTorch hidden state tensor into the SPSC ring buffer.")
+        .def("process_sync", &PySpireDaemon::process_sync,
+             py::arg("hidden_states"),
+             "TESTING ONLY: run the SAE encoder synchronously and return the "
+             "latents tensor. Blocks the caller and bypasses the async queue; "
+             "use push_activation in production.");
 }
