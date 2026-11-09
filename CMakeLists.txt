@@ -17,6 +17,20 @@ if(NOT nlohmann_json_FOUND)
     FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
+# Google Benchmark for performance measurements.
+find_package(benchmark QUIET)
+if(NOT benchmark_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        benchmark
+        GIT_REPOSITORY https://github.com/google/benchmark.git
+        GIT_TAG v1.10.0
+    )
+    # Benchmark depends on GTest for some tests; we disable them to avoid nested dependencies.
+    set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(benchmark)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
@@ -54,3 +68,4 @@ target_link_libraries(spire PRIVATE spire_core CUDA::cudart)
 
 enable_testing()
 add_subdirectory(tests)
+add_subdirectory(benchmarks)
