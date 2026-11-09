@@ -51,3 +51,6 @@ compile_flags.txt
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# Generated test checkpoints
+*.safetensors

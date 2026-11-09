@@ -74,11 +74,10 @@ public:
             stream
         );
 
-        {
-            py::gil_scoped_release release;
-            if (!queue_.push(std::move(payload))) {
-                throw std::runtime_error("Activation queue is full");
-            }
+        // The binding's call_guard already released the GIL for this call, so
+        // do not release it a second time here.
+        if (!queue_.push(std::move(payload))) {
+            throw std::runtime_error("Activation queue is full");
         }
     }
 };
