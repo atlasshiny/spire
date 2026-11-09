@@ -54,3 +54,6 @@ Thumbs.db
 
 # Generated test checkpoints
 *.safetensors
+
+# CPython build artifacts
+__pycache__/
