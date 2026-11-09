@@ -1,0 +1,38 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "spire"
+version = "0.1.0"
+description = "Real-time SAE activation interception for GPU inference"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.0"]
+
+[tool.scikit-build]
+minimum-version = "0.10"
+# Keep wheel builds separate from the regular CMake presets.
+build-dir = "build/python"
+# This project ships a compiled extension only; there are no pure-Python packages.
+wheel.packages = []
+# Editable installs load the extension straight from build/python and rebuild
+# incrementally on import, so C++ changes need no reinstall step.
+editable.rebuild = true
+editable.verbose = false
+
+[tool.scikit-build.cmake.define]
+BUILD_PYTHON_BINDINGS = "ON"
+SPIRE_BUILD_TESTS = "OFF"
+SPIRE_BUILD_BENCHMARKS = "OFF"
+
+[dependency-groups]
+# Needed in the project environment because the extension builds against the
+# environment's PyTorch rather than an isolated build environment. numpy is
+# used by the numerical parity test.
+dev = ["scikit-build-core>=0.10", "numpy>=1.24"]
+
+[tool.uv]
+# Build Spire without isolation so scikit-build-core can query the installed
+# PyTorch for its include and library paths.
+no-build-isolation-package = ["spire"]

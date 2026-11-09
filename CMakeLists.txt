@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.30)
 project(Spire LANGUAGES CXX CUDA)
 
+option(BUILD_PYTHON_BINDINGS "Build the Python bindings module" OFF)
+option(SPIRE_BUILD_TESTS "Build Spire tests" ON)
+option(SPIRE_BUILD_BENCHMARKS "Build Spire benchmarks" ON)
+
 find_package(CUDAToolkit REQUIRED)
 
 # JSON parsing for .safetensors headers. Prefer a system package; fall back to
@@ -18,18 +22,20 @@ if(NOT nlohmann_json_FOUND)
 endif()
 
 # Google Benchmark for performance measurements.
-set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
-find_package(benchmark QUIET)
-if(NOT benchmark_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(
-        benchmark
-        GIT_REPOSITORY https://github.com/google/benchmark.git
-        GIT_TAG v1.10.0
-    )
-    # Benchmark depends on GTest for some tests; we disable them to avoid nested dependencies.
-    set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(benchmark)
+if(SPIRE_BUILD_BENCHMARKS)
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    find_package(benchmark QUIET)
+    if(NOT benchmark_FOUND)
+        include(FetchContent)
+        FetchContent_Declare(
+            benchmark
+            GIT_REPOSITORY https://github.com/google/benchmark.git
+            GIT_TAG v1.10.0
+        )
+        # Benchmark depends on GTest for some tests; we disable them to avoid nested dependencies.
+        set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(benchmark)
+    endif()
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -66,18 +72,23 @@ target_link_libraries(spire PRIVATE spire_core CUDA::cudart)
 option(BUILD_PYTHON_BINDINGS "Build the Python bindings module" OFF)
 
 if(BUILD_PYTHON_BINDINGS)
-    # Determine which Python interpreter to use for building bindings.
-    # Priority: 1. User-provided SPIRE_PYTHON_EXECUTABLE, 2. Current active python3, 3. Fallback search.
+    # Pick the interpreter whose site-packages hold PyTorch. An explicit
+    # SPIRE_PYTHON_EXECUTABLE wins, then the active virtualenv (the normal case
+    # for `uv pip install`/`uv sync`), then whatever Python CMake or
+    # scikit-build-core discovered.
+    if(NOT SPIRE_PYTHON_EXECUTABLE AND DEFINED ENV{VIRTUAL_ENV})
+        set(_spire_venv_python "$ENV{VIRTUAL_ENV}/bin/python")
+        if(EXISTS "${_spire_venv_python}")
+            set(SPIRE_PYTHON_EXECUTABLE "${_spire_venv_python}")
+        endif()
+    endif()
+    if(NOT SPIRE_PYTHON_EXECUTABLE AND Python_EXECUTABLE)
+        set(SPIRE_PYTHON_EXECUTABLE "${Python_EXECUTABLE}")
+    endif()
     if(NOT SPIRE_PYTHON_EXECUTABLE)
-        find_program(SPIRE_PYTHON_EXECUTABLE 
-                     NAMES python3 python 
-                     ENV PYTHON_EXECUTABLE)
+        find_program(SPIRE_PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
     endif()
 
-    if(NOT SPIRE_PYTHON_EXECUTABLE)
-        message(FATAL_ERROR "BUILD_PYTHON_BINDINGS=ON but no Python interpreter was found.")
-    endif()
-    
     message(STATUS "Using Python interpreter: ${SPIRE_PYTHON_EXECUTABLE}")
 
     # Pybind11 for Python bindings.
@@ -135,9 +146,19 @@ if(BUILD_PYTHON_BINDINGS)
     set_target_properties(spire_cpp PROPERTIES
         PREFIX ""
         SUFFIX ".so"
-        BUILD_RPATH "${TORCH_PYTHON_ROOT}/lib")
+        BUILD_RPATH "${TORCH_PYTHON_ROOT}/lib"
+        INSTALL_RPATH "${TORCH_PYTHON_ROOT}/lib")
+
+    # scikit-build-core installs the wheel contents from the install tree, so
+    # place the extension at the root of site-packages.
+    install(TARGETS spire_cpp LIBRARY DESTINATION .)
 endif()
 
-enable_testing()
-add_subdirectory(tests)
-add_subdirectory(benchmarks)
+if(SPIRE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+if(SPIRE_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
