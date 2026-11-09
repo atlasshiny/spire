@@ -249,12 +249,37 @@ gitignored, so generate or supply it first.
 
 ## Benchmarks
 
-Google Benchmark targets cover the activation queue and are built by default:
+The benchmark suite is built by default. Build and run each target from
+`build/local/benchmarks/`:
+
+| Target | What it measures |
+| --- | --- |
+| `sae_kernel_benchmark` | CUDA-event kernel latency, latents/s, TFLOP/s, and logical weight bandwidth across batch, hidden, and SAE dimensions. |
+| `pipeline_benchmark` | End-to-end async latency percentiles (p50/p95/p99), sustained throughput, and the queue-handoff baseline. |
+| `allocation_benchmark` | `cudaMalloc`, `DeviceBuffer`, pooled `cudaMallocAsync`, preallocated-pool reuse, and batched allocations at several sizes. |
+| `activation_queue_benchmark` | SPSC vs mutex queue throughput, capacity sweep, producer-only, consumer-only, full-queue push, and empty-queue pop. |
 
 ```bash
-cmake --build --preset local --target activation_queue_benchmark
+cmake --build --preset local --target \
+    sae_kernel_benchmark pipeline_benchmark \
+    allocation_benchmark activation_queue_benchmark
+
+./build/local/benchmarks/sae_kernel_benchmark
+./build/local/benchmarks/pipeline_benchmark
+./build/local/benchmarks/allocation_benchmark
 ./build/local/benchmarks/activation_queue_benchmark
 ```
+
+Pass Google Benchmark flags to narrow a run, for example:
+
+```bash
+./build/local/benchmarks/sae_kernel_benchmark \
+    --benchmark_filter='b4_' --benchmark_min_time=0.1s
+```
+
+The pipeline benchmark reports two modes: `latency` (serialized request/response)
+and `throughput` (queue backlog under sustained load). Kernel timings use CUDA
+events; pipeline latency uses `std::chrono::steady_clock`.
 
 Set `-DSPIRE_BUILD_BENCHMARKS=OFF` (or `-DSPIRE_BUILD_TESTS=OFF`) to skip them
 when embedding Spire in another build.
