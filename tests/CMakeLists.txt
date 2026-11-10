@@ -14,6 +14,12 @@ add_executable(sae_decoder_test sae_decoder_test.cu)
 target_link_libraries(sae_decoder_test PRIVATE spire_core CUDA::cudart)
 add_test(NAME sae_decoder COMMAND sae_decoder_test)
 
+# cuBLAS GEMM variants of the encoder/decoder, checked against the host
+# reference. Validates both the row-major column-major mapping and epilogues.
+add_executable(sae_gemm_test sae_gemm_test.cu)
+target_link_libraries(sae_gemm_test PRIVATE spire_core CUDA::cudart CUDA::cublas)
+add_test(NAME sae_gemm COMMAND sae_gemm_test)
+
 # End-to-end kernel check: the harness verifies SAE latents against a host
 # reference and returns non-zero on mismatch.
 add_test(NAME sae_encoder COMMAND spire)

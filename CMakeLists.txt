@@ -53,6 +53,7 @@ add_library(spire_core
     src/daemon.cpp
     src/kernels/sae_encoder.cu
     src/kernels/sae_decoder.cu
+    src/kernels/sae_gemm.cu
     src/kernels/dtype_convert.cu
     src/SafetensorsFile.cpp
     src/mapped_file.cpp
@@ -65,7 +66,7 @@ target_include_directories(spire_core PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(spire_core PRIVATE CUDA::cudart nlohmann_json::nlohmann_json)
+target_link_libraries(spire_core PRIVATE CUDA::cudart CUDA::cublas nlohmann_json::nlohmann_json)
 
 add_executable(spire src/main.cpp)
 target_link_libraries(spire PRIVATE spire_core CUDA::cudart)
