@@ -29,7 +29,6 @@ compile_commands.json
 *.ninja
 .ninja_deps
 .ninja_log
-Makefile
 
 # Dependency and coverage output
 *.d
