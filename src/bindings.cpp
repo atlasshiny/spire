@@ -39,6 +39,37 @@ private:
     std::jthread daemon_thread_;
     c10::DeviceIndex device_index_ = 0;
 
+    void start_daemon() {
+        daemon_thread_ = std::jthread([this](std::stop_token stoken) {
+            c10::cuda::CUDAGuard guard(device_index_);
+
+            while (!stoken.stop_requested() &&
+                   running_.load(std::memory_order_acquire)) {
+                spire::ActivationPayload payload;
+                if (!queue_.try_pop(payload)) {
+                    std::this_thread::yield();
+                    continue;
+                }
+
+                spire::launch_sae_kernel(payload);
+                // Synchronize before publishing the result so consumers never
+                // observe latents that are still being written.
+                CUDA_CHECK(cudaStreamSynchronize(payload.stream));
+
+                torch::Tensor latents = wrap_latents(
+                    payload.d_latents, payload.batch_size);
+
+                {
+                    std::lock_guard<std::mutex> lock(results_mutex_);
+                    if (completed_.size() >= kMaxCompleted) {
+                        completed_.pop_front();
+                    }
+                    completed_.push_back(std::move(latents));
+                }
+            }
+        });
+    }
+
     void validate_activation(const torch::Tensor& hidden_states) const {
         TORCH_CHECK(hidden_states.is_cuda(),
                     "Activation tensor must be on CUDA VRAM.");
@@ -75,35 +106,47 @@ public:
     explicit PySpireDaemon(const std::string& safetensors_path) {
         weights_ = spire::load_safetensors(safetensors_path);
         device_index_ = c10::cuda::current_device();
+        start_daemon();
+    }
 
-        daemon_thread_ = std::jthread([this](std::stop_token stoken) {
-            c10::cuda::CUDAGuard guard(device_index_);
+    // Adopts caller-owned CUDA tensors instead of loading a checkpoint. The
+    // tensors are kept alive by the buffer deleters, so they must not be
+    // mutated while the daemon is running. This is the path used by the
+    // SAELens/TransformerLens glue, which already has the weights in VRAM.
+    PySpireDaemon(torch::Tensor weights, torch::Tensor bias) {
+        TORCH_CHECK(weights.is_cuda() && bias.is_cuda(),
+                    "Weights and bias must be CUDA tensors.");
+        TORCH_CHECK(weights.dim() == 2,
+                    "Weights must be [sae_dim, hidden_dim].");
+        TORCH_CHECK(weights.scalar_type() == torch::kBFloat16,
+                    "Weights must be bfloat16.");
+        TORCH_CHECK(weights.is_contiguous(), "Weights must be contiguous.");
+        TORCH_CHECK(bias.dim() == 1, "Bias must be [sae_dim].");
+        TORCH_CHECK(bias.scalar_type() == torch::kFloat32,
+                    "Bias must be float32.");
+        TORCH_CHECK(bias.is_contiguous(), "Bias must be contiguous.");
+        TORCH_CHECK(bias.size(0) == weights.size(0),
+                    "Bias size (", bias.size(0),
+                    ") does not match the weight rows (", weights.size(0),
+                    ").");
+        TORCH_CHECK(weights.device().index() == bias.device().index(),
+                    "Weights and bias must be on the same CUDA device.");
+        TORCH_CHECK(weights.size(1) > 0, "Weights must not be empty.");
 
-            while (!stoken.stop_requested() &&
-                   running_.load(std::memory_order_acquire)) {
-                spire::ActivationPayload payload;
-                if (!queue_.try_pop(payload)) {
-                    std::this_thread::yield();
-                    continue;
-                }
+        device_index_ = static_cast<c10::DeviceIndex>(weights.device().index());
 
-                spire::launch_sae_kernel(payload);
-                // Synchronize before publishing the result so consumers never
-                // observe latents that are still being written.
-                CUDA_CHECK(cudaStreamSynchronize(payload.stream));
+        // Non-owning views; capturing the tensors in the deleters keeps their
+        // storage alive for as long as a payload can reference it.
+        weights_.d_weights = spire::DeviceBuffer<__nv_bfloat16>(
+            reinterpret_cast<__nv_bfloat16*>(weights.data_ptr()),
+            [weights](__nv_bfloat16*) { /* owned by torch */ });
+        weights_.d_bias = spire::DeviceBuffer<float>(
+            reinterpret_cast<float*>(bias.data_ptr()),
+            [bias](float*) { /* owned by torch */ });
+        weights_.sae_dim = static_cast<std::size_t>(weights.size(0));
+        weights_.hidden_dim = static_cast<std::size_t>(weights.size(1));
 
-                torch::Tensor latents = wrap_latents(
-                    payload.d_latents, payload.batch_size);
-
-                {
-                    std::lock_guard<std::mutex> lock(results_mutex_);
-                    if (completed_.size() >= kMaxCompleted) {
-                        completed_.pop_front();
-                    }
-                    completed_.push_back(std::move(latents));
-                }
-            }
-        });
+        start_daemon();
     }
 
     ~PySpireDaemon() {
@@ -195,7 +238,12 @@ PYBIND11_MODULE(spire_cpp, m) {
     m.doc() = "Spire real-time SAE activation interception daemon";
 
     py::class_<PySpireDaemon>(m, "SpireDaemon")
-        .def(py::init<const std::string&>())
+        .def(py::init<const std::string&>(), py::arg("safetensors_path"),
+             "Load encoder weights and bias from a .safetensors checkpoint.")
+        .def(py::init<torch::Tensor, torch::Tensor>(), py::arg("weights"),
+             py::arg("bias"),
+             "Use encoder weights [sae_dim, hidden_dim] BF16 and bias "
+             "[sae_dim] FP32 already resident on CUDA.")
         .def("push_activation", &PySpireDaemon::push_activation,
              py::call_guard<py::gil_scoped_release>(),
              "Push a PyTorch hidden state tensor into the SPSC ring buffer.")

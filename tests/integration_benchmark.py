@@ -1,9 +1,8 @@
 import time
+
 import torch
-import numpy as np
-from sae_lens import SAE
 from transformer_lens import TransformerBridge
-from spire import SpireDaemon
+
 from spire.integrations import make_daemon_from_sae, intercept_activations
 
 def benchmark_integration():
