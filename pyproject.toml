@@ -30,7 +30,7 @@ SPIRE_BUILD_BENCHMARKS = "OFF"
 # Needed in the project environment because the extension builds against the
 # environment's PyTorch rather than an isolated build environment. numpy is
 # used by the numerical parity test.
-dev = ["scikit-build-core>=0.10", "numpy>=1.24"]
+dev = ["scikit-build-core>=0.10", "numpy>=1.24", "pandas", "matplotlib", "seaborn"]
 
 [tool.uv]
 # Build Spire without isolation so scikit-build-core can query the installed
