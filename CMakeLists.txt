@@ -53,7 +53,11 @@ add_library(spire_core
     src/daemon.cpp
     src/kernels/sae_encoder.cu
     src/kernels/sae_decoder.cu
-    src/kernels/sae_gemm.cu
+    src/kernels/sae_gemm_common.cu
+    src/kernels/sae_gemm_encoder.cu
+    src/kernels/sae_gemm_decoder.cu
+    src/kernels/legacy/sae_encoder_kernel.cu
+    src/kernels/legacy/sae_decoder_kernel.cu
     src/kernels/dtype_convert.cu
     src/SafetensorsFile.cpp
     src/mapped_file.cpp
