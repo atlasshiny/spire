@@ -62,4 +62,4 @@ plots/
 benchmark_results/
 *.nsys-rep
 *.ncu-rep
-*.sqlite
+*.sqliteexperiments/
