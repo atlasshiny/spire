@@ -13,10 +13,12 @@ all: build-local build-python test-local test-integration
 
 # Build the C++ core and CLI tools
 build-local:
-	cmake --build $(BUILD_DIR_LOCAL) --preset local
+	@if [ ! -f "$(BUILD_DIR_LOCAL)/CMakeCache.txt" ]; then cmake --preset local; fi
+	cmake --build --preset local
 
 # Build the Python bindings module
 build-python:
+	@if [ ! -f "$(BUILD_DIR_PYTHON)/CMakeCache.txt" ]; then cmake -S . -B $(BUILD_DIR_PYTHON) -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON -DSPIRE_BUILD_TESTS=OFF -DSPIRE_BUILD_BENCHMARKS=OFF -DPython_EXECUTABLE=$(PYTHON_BIN); fi
 	cmake --build $(BUILD_DIR_PYTHON) --target spire_cpp
 
 # Run C++ unit tests
