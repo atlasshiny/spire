@@ -56,3 +56,10 @@ Thumbs.db
 
 # CPython build artifacts
 __pycache__/
+
+# Benchmark and Profiling output
+plots/
+benchmark_results/
+*.nsys-rep
+*.ncu-rep
+*.sqlite
