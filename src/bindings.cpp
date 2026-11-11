@@ -38,6 +38,8 @@ private:
     std::atomic<bool> running_{true};
     std::jthread daemon_thread_;
     c10::DeviceIndex device_index_ = 0;
+    cudaStream_t daemon_stream_ = nullptr;
+    cudaEvent_t ready_event_ = nullptr;
 
     void start_daemon() {
         daemon_thread_ = std::jthread([this](std::stop_token stoken) {
@@ -51,10 +53,12 @@ private:
                     continue;
                 }
 
+                if (payload.ready_event != nullptr) {
+                    CUDA_CHECK(cudaStreamWaitEvent(daemon_stream_, payload.ready_event, 0));
+                }
+
                 spire::launch_sae_kernel(payload);
-                // Synchronize before publishing the result so consumers never
-                // observe latents that are still being written.
-                CUDA_CHECK(cudaStreamSynchronize(payload.stream));
+                CUDA_CHECK(cudaStreamSynchronize(daemon_stream_));
 
                 torch::Tensor latents = wrap_latents(
                     payload.d_latents, payload.batch_size);
@@ -106,6 +110,11 @@ public:
     explicit PySpireDaemon(const std::string& safetensors_path) {
         weights_ = spire::load_safetensors(safetensors_path);
         device_index_ = c10::cuda::current_device();
+        {
+            c10::cuda::CUDAGuard guard(device_index_);
+            CUDA_CHECK(cudaStreamCreate(&daemon_stream_));
+            CUDA_CHECK(cudaEventCreate(&ready_event_));
+        }
         start_daemon();
     }
 
@@ -135,6 +144,12 @@ public:
 
         device_index_ = static_cast<c10::DeviceIndex>(weights.device().index());
 
+        {
+            c10::cuda::CUDAGuard guard(device_index_);
+            CUDA_CHECK(cudaStreamCreate(&daemon_stream_));
+            CUDA_CHECK(cudaEventCreate(&ready_event_));
+        }
+
         // Non-owning views; capturing the tensors in the deleters keeps their
         // storage alive for as long as a payload can reference it.
         weights_.d_weights = spire::DeviceBuffer<__nv_bfloat16>(
@@ -152,6 +167,12 @@ public:
     ~PySpireDaemon() {
         running_.store(false, std::memory_order_release);
         daemon_thread_.request_stop();
+        if (daemon_stream_ != nullptr) {
+            cudaStreamDestroy(daemon_stream_);
+        }
+        if (ready_event_ != nullptr) {
+            cudaEventDestroy(ready_event_);
+        }
     }
 
     void push_activation(torch::Tensor hidden_states) {
@@ -168,17 +189,30 @@ public:
             reinterpret_cast<__nv_bfloat16*>(hidden_states.data_ptr()),
             [hidden_states](__nv_bfloat16*) {});
 
-        spire::DeviceBuffer<float> latents =
-            spire::make_device_buffer<float>(batch_size * weights_.sae_dim);
+        // Allocate latents via torch's caching allocator (torch::empty) instead
+        // of cudaMalloc, so we reuse pooled memory and avoid allocation
+        // overhead on the hot path.
+        torch::Tensor latents_tensor = torch::empty(
+            {static_cast<long>(batch_size),
+             static_cast<long>(weights_.sae_dim)},
+            torch::TensorOptions()
+                .dtype(torch::kFloat32)
+                .device(torch::kCUDA, device_index_));
 
-        const cudaStream_t stream =
+        spire::DeviceBuffer<float> latents(
+            reinterpret_cast<float*>(latents_tensor.data_ptr()),
+            [latents_tensor](float*) { /* owned by torch */ });
+
+        // Record an event on the model's stream so the daemon can wait for the
+        // input data without synchronizing (blocking) the model's stream.
+        const cudaStream_t model_stream =
             c10::cuda::getCurrentCUDAStream(device_index_).stream();
+        CUDA_CHECK(cudaEventRecord(ready_event_, model_stream));
 
         spire::ActivationPayload payload = weights_.make_payload(
-            std::move(input_buf), std::move(latents), batch_size, stream);
+            std::move(input_buf), std::move(latents), batch_size,
+            daemon_stream_, ready_event_);
 
-        // The binding's call_guard already released the GIL for this call, so
-        // do not release it a second time here.
         if (!queue_.push(std::move(payload))) {
             throw std::runtime_error("Activation queue is full");
         }

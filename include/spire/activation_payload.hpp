@@ -15,7 +15,8 @@ struct ActivationPayload {
     size_t batch_size;
     size_t hidden_dim;
     size_t sae_dim;
-    cudaStream_t stream;
+    cudaStream_t stream;        // daemon's side stream for kernel launch
+    cudaEvent_t ready_event;    // recorded on model stream before push
 };
 
 } // namespace spire

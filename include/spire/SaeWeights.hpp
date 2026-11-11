@@ -24,7 +24,8 @@ struct SaeWeights {
     ActivationPayload make_payload(DeviceBuffer<__nv_bfloat16> input,
                                    DeviceBuffer<float> latents,
                                    std::size_t batch_size,
-                                   cudaStream_t stream) const {
+                                   cudaStream_t stream,
+                                   cudaEvent_t ready_event = nullptr) const {
         return ActivationPayload{
             .d_input = std::move(input),
             .d_weights = d_weights,
@@ -34,6 +35,7 @@ struct SaeWeights {
             .hidden_dim = hidden_dim,
             .sae_dim = sae_dim,
             .stream = stream,
+            .ready_event = ready_event,
         };
     }
 };
